@@ -69,7 +69,11 @@ python scripts/nats_pub.py
 ```
 
 ## Что приложить в отчёт
+Документацию по API (Swagger) `http://127.0.0.1:8000/docs`
+<img width="1730" height="819" alt="image" src="https://github.com/user-attachments/assets/4e903afa-37c8-4b11-a793-3f659315af6c" />
 
-4. Документацию по API (Swagger) `http://127.0.0.1:8000/docs`
-5. Скрин с WebSocket-клиента `http://127.0.0.1:8000/ws-ui`
-6. Пример работы NATS (subscriber + publisher) запусти `python scripts/nats_sub.py` и `python scripts/nats_pub.py` и сделай скрин консоли
+Скрин с WebSocket-клиента
+<img width="1910" height="391" alt="image" src="https://github.com/user-attachments/assets/105bb649-282e-4272-a8cf-cbfd3dc918e9" />
+
+Пример работы NATS (subscriber + publisher) запусти `python scripts/nats_sub.py` и `python scripts/nats_pub.py` и сделай скрин консоли
+<img width="1761" height="482" alt="image" src="https://github.com/user-attachments/assets/e575e4aa-952f-4089-91ec-f04bc8ce8420" />
