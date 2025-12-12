@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebSocket Viewer</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 16px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+      .pill { padding: 4px 10px; border-radius: 999px; background: #eee; }
+      button { padding: 8px 10px; cursor: pointer; }
+      input { padding: 8px 10px; min-width: 320px; }
+      pre { background: #0b1020; color: #dbe7ff; padding: 12px; border-radius: 8px; overflow: auto; height: 60vh; }
+      .ok { background: #d8ffe0; }
+      .bad { background: #ffe0e0; }
+      .muted { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h2>WebSocket viewer</h2>
+
+    <div class="row">
+      <span id="status" class="pill bad">disconnected</span>
+      <span class="muted">URL:</span>
+      <input id="url" />
+    </div>
+
+    <div class="row" style="margin-top: 12px;">
+      <button id="connect">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <button id="ping" disabled>Send ping</button>
+      <button id="clear">Clear</button>
+    </div>
+
+    <pre id="log"></pre>
+
+    <script>
+      const logEl = document.getElementById("log");
+      const statusEl = document.getElementById("status");
+      const urlEl = document.getElementById("url");
+      const connectBtn = document.getElementById("connect");
+      const disconnectBtn = document.getElementById("disconnect");
+      const pingBtn = document.getElementById("ping");
+      const clearBtn = document.getElementById("clear");
+
+      function defaultWsUrl() {
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        return `${protocol}://${window.location.host}/ws/items`;
+      }
+
+      function setStatus(text, ok) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("ok", !!ok);
+        statusEl.classList.toggle("bad", !ok);
+      }
+
+      function append(line) {
+        logEl.textContent += line + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      urlEl.value = defaultWsUrl();
+
+      let ws = null;
+
+      connectBtn.addEventListener("click", () => {
+        if (ws) return;
+        const url = urlEl.value.trim();
+        if (!url) return;
+
+        ws = new WebSocket(url);
+        setStatus("connecting...", false);
+
+        ws.onopen = () => {
+          setStatus("connected", true);
+          append(`[open] ${new Date().toISOString()}`);
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          pingBtn.disabled = false;
+        };
+
+        ws.onmessage = (event) => {
+          append(`[message] ${event.data}`);
+        };
+
+        ws.onerror = () => {
+          append(`[error] ${new Date().toISOString()}`);
+        };
+
+        ws.onclose = (event) => {
+          append(`[close] code=${event.code} reason=${event.reason || "-"}`);
+          setStatus("disconnected", false);
+          ws = null;
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          pingBtn.disabled = true;
+        };
+      });
+
+      disconnectBtn.addEventListener("click", () => {
+        if (!ws) return;
+        ws.close();
+      });
+
+      pingBtn.addEventListener("click", () => {
+        if (!ws) return;
+        ws.send("ping");
+        append(`[send] ping`);
+      });
+
+      clearBtn.addEventListener("click", () => {
+        logEl.textContent = "";
+      });
+    </script>
+  </body>
+</html>

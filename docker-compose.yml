@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NATS_SUBJECT=items.updates
+      - RATES_INTERVAL_SECONDS=60
+      - RATES_SOURCE_URL=https://api.binance.com/api/v3/ticker/price
+      - DATABASE_URL=sqlite+aiosqlite:///./data/currency.db
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - nats
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["-m", "8222"]
