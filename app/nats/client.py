@@ -33,6 +33,14 @@ class NatsClient:
         """Уникальный id текущего приложения"""
         return self._source_id
 
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def subject(self) -> str:
+        return self._subject
+
     def set_on_event(self, handler: Optional[EventHandler]) -> None:
         """Установить обработчик входящих событий"""
         self._on_event = handler

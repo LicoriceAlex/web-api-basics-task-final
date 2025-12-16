@@ -7,7 +7,8 @@ from typing import Awaitable, Callable, Optional
 import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from . import crud, schemas
+from ..db import crud
+from ..models import schemas
 
 NotifyFn = Callable[[dict], Awaitable[None]]
 

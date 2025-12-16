@@ -4,8 +4,8 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import schemas
-from .models import Currency, Rate
+from ..models import schemas
+from ..models.orm import Currency, Rate
 
 
 async def list_currencies(session: AsyncSession) -> list[Currency]:

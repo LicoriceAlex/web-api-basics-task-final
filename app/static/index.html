@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Currency Tracker — Simple UI</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 16px; }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      h2 { font-size: 14px; margin: 16px 0 8px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .muted { color: #666; font-size: 12px; }
+      input, textarea, select { padding: 6px 8px; }
+      textarea { width: 520px; height: 80px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+      button { padding: 6px 10px; cursor: pointer; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border-top: 1px solid #ddd; padding: 6px; text-align: left; }
+      pre { background: #0b1020; color: #dbe7ff; padding: 10px; border-radius: 8px; overflow: auto; max-height: 260px; }
+      .pill { padding: 3px 8px; border-radius: 999px; background: #eee; font-size: 12px; }
+      .ok { background: #d8ffe0; }
+      .bad { background: #ffe0e0; }
+      code { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>Currency Tracker — Simple UI</h1>
+    <div class="row">
+      <span id="wsStatus" class="pill bad">WS: disconnected</span>
+      <span id="natsStatus" class="pill">NATS: …</span>
+      <a class="muted" href="/docs" target="_blank" rel="noreferrer">Swagger /docs</a>
+    </div>
+
+    <h2>1) Курсы валют</h2>
+    <div class="row">
+      <button id="updateRates">Обновить курсы сейчас (POST /tasks/run)</button>
+      <span class="muted">Нужно, чтобы в базе появились свежие цены.</span>
+    </div>
+    <pre id="latestOut"></pre>
+
+    <h2>2–3) Валюты: добавить / редактировать</h2>
+    <div class="row">
+      <button id="refreshItems">Обновить список</button>
+      <span id="itemsInfo" class="muted"></span>
+    </div>
+
+    <div class="row" style="margin-top: 8px;">
+      <input id="newCode" placeholder="CODE (например BTCUSDT)" />
+      <input id="newName" placeholder="Name" />
+      <label class="muted"><input id="newEnabled" type="checkbox" checked /> enabled</label>
+      <button id="addItem">Добавить</button>
+      <span id="addOut" class="muted"></span>
+    </div>
+
+    <table style="margin-top: 8px;">
+      <thead>
+        <tr>
+          <th>id</th>
+          <th>code</th>
+          <th>name</th>
+          <th>enabled</th>
+          <th>последняя цена</th>
+          <th>действия</th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+
+    <h2>6) История цены криптовалюты</h2>
+    <div class="row">
+      <select id="historyCode"></select>
+      <input id="historyLimit" type="number" min="1" max="500" value="50" />
+      <button id="getLatest">Последняя цена (GET /rates/latest)</button>
+      <button id="getHistory">История (GET /rates)</button>
+    </div>
+    <pre id="historyOut"></pre>
+
+    <h2>7) Публиковать ивент в NATS</h2>
+    <div class="row">
+      <input id="pubType" value="external_message" />
+      <textarea id="pubPayload">{ "text": "hello from UI" }</textarea>
+    </div>
+    <div class="row" style="margin-top: 6px;">
+      <button id="publishNats">Publish (POST /nats/publish)</button>
+      <button id="refreshNats" type="button">NATS status (GET /nats/status)</button>
+      <span id="pubOut" class="muted"></span>
+    </div>
+
+    <h2>4) Сообщения, которые идут в NATS</h2>
+    <pre id="natsLog"></pre>
+
+    <h2>5) Сообщения по WebSocket</h2>
+    <div class="row">
+      <button id="wsConnect">Connect WS</button>
+      <button id="wsDisconnect" disabled>Disconnect</button>
+      <button id="wsPing" disabled>Ping</button>
+      <button id="clearLogs">Clear logs</button>
+      <span class="muted">WS: <code id="wsUrl"></code></span>
+    </div>
+    <pre id="wsLog"></pre>
+
+    <script>
+      const el = (id) => document.getElementById(id);
+      const fmt = (x) => { try { return JSON.stringify(x, null, 2); } catch { return String(x); } };
+
+      const wsStatus = el("wsStatus");
+      const natsStatus = el("natsStatus");
+
+      const latestOut = el("latestOut");
+      const updateRatesBtn = el("updateRates");
+
+      const refreshItemsBtn = el("refreshItems");
+      const itemsInfo = el("itemsInfo");
+      const itemsBody = el("itemsBody");
+
+      const newCode = el("newCode");
+      const newName = el("newName");
+      const newEnabled = el("newEnabled");
+      const addItemBtn = el("addItem");
+      const addOut = el("addOut");
+
+      const historyCode = el("historyCode");
+      const historyLimit = el("historyLimit");
+      const getLatestBtn = el("getLatest");
+      const getHistoryBtn = el("getHistory");
+      const historyOut = el("historyOut");
+
+      const pubType = el("pubType");
+      const pubPayload = el("pubPayload");
+      const publishNatsBtn = el("publishNats");
+      const refreshNatsBtn = el("refreshNats");
+      const pubOut = el("pubOut");
+
+      const natsLog = el("natsLog");
+      const wsLog = el("wsLog");
+      const clearLogsBtn = el("clearLogs");
+
+      const wsConnectBtn = el("wsConnect");
+      const wsDisconnectBtn = el("wsDisconnect");
+      const wsPingBtn = el("wsPing");
+      const wsUrlEl = el("wsUrl");
+
+      const BASE = window.location.origin;
+      const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws/items`;
+      wsUrlEl.textContent = WS_URL;
+
+      function append(pre, line) {
+        pre.textContent += line + "\n";
+        pre.scrollTop = pre.scrollHeight;
+      }
+
+      async function api(path, options = {}) {
+        const url = BASE + path;
+        const headers = { ...(options.headers || {}) };
+        if (options.body != null && !headers["content-type"]) headers["content-type"] = "application/json";
+        const res = await fetch(url, { ...options, headers });
+        const text = await res.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${typeof data === "object" && data && data.detail ? data.detail : text}`);
+        return data;
+      }
+
+      async function refreshNatsStatus() {
+        try {
+          const st = await api("/nats/status");
+          natsStatus.textContent = st.connected ? `NATS: connected (${st.subject})` : "NATS: disconnected";
+          natsStatus.className = "pill " + (st.connected ? "ok" : "bad");
+        } catch (e) {
+          natsStatus.textContent = "NATS: error";
+          natsStatus.className = "pill bad";
+        }
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function loadItems() {
+        itemsInfo.textContent = "loading…";
+        itemsBody.innerHTML = "";
+        historyCode.innerHTML = "";
+
+        try {
+          const items = await api("/items");
+          itemsInfo.textContent = `${items.length} items`;
+
+          for (const item of items) {
+            const opt = document.createElement("option");
+            opt.value = item.code;
+            opt.textContent = item.code;
+            historyCode.appendChild(opt);
+
+            const tr = document.createElement("tr");
+            tr.dataset.id = item.id;
+            tr.dataset.code = item.code;
+            tr.innerHTML = `
+              <td><code>${item.id}</code></td>
+              <td><code>${item.code}</code></td>
+              <td><input data-name value="${escapeHtml(item.name || "")}" /></td>
+              <td><input data-enabled type="checkbox" ${item.enabled ? "checked" : ""} /></td>
+              <td class="muted" data-latest>…</td>
+              <td>
+                <button data-save>save</button>
+                <button data-del>del</button>
+              </td>
+            `;
+            itemsBody.appendChild(tr);
+
+            loadLatestForRow(tr, item.code);
+          }
+
+          await refreshLatestSummary();
+        } catch (e) {
+          itemsInfo.textContent = "error";
+          append(wsLog, `[items] ${e}`);
+        }
+      }
+
+      async function loadLatestForRow(tr, code) {
+        const cell = tr.querySelector("[data-latest]");
+        try {
+          const r = await api(`/rates/latest?code=${encodeURIComponent(code)}`);
+          cell.textContent = r && typeof r.value === "number" ? String(r.value) : "—";
+        } catch {
+          cell.textContent = "—";
+        }
+      }
+
+      async function refreshLatestSummary() {
+        const code = historyCode.value;
+        if (!code) {
+          latestOut.textContent = "Нет валют. Добавь валюту и нажми «Обновить курсы сейчас».";
+          return;
+        }
+        try {
+          const res = await api(`/rates/latest?code=${encodeURIComponent(code)}`);
+          latestOut.textContent = fmt(res);
+        } catch (e) {
+          latestOut.textContent = String(e);
+        }
+      }
+
+      refreshItemsBtn.addEventListener("click", loadItems);
+
+      addItemBtn.addEventListener("click", async () => {
+        addOut.textContent = "…";
+        try {
+          const payload = {
+            code: newCode.value.trim(),
+            name: newName.value.trim(),
+            enabled: !!newEnabled.checked,
+          };
+          await api("/items", { method: "POST", body: JSON.stringify(payload) });
+          addOut.textContent = "ok";
+          newCode.value = "";
+          newName.value = "";
+          await loadItems();
+        } catch (e) {
+          addOut.textContent = "error";
+          append(wsLog, `[add] ${e}`);
+        }
+      });
+
+      itemsBody.addEventListener("click", async (evt) => {
+        const tr = evt.target.closest("tr");
+        if (!tr) return;
+        const id = Number(tr.dataset.id);
+        const code = tr.dataset.code;
+
+        if (evt.target.matches("[data-del]")) {
+          if (!confirm(`Delete ${code} (#${id})?`)) return;
+          try {
+            await api(`/items/${id}`, { method: "DELETE" });
+            await loadItems();
+          } catch (e) {
+            append(wsLog, `[del] ${e}`);
+          }
+          return;
+        }
+
+        if (evt.target.matches("[data-save]")) {
+          const name = tr.querySelector("[data-name]").value;
+          const enabled = tr.querySelector("[data-enabled]").checked;
+          try {
+            await api(`/items/${id}`, { method: "PATCH", body: JSON.stringify({ name, enabled }) });
+            await loadItems();
+          } catch (e) {
+            append(wsLog, `[save] ${e}`);
+          }
+        }
+      });
+
+      getLatestBtn.addEventListener("click", async () => {
+        historyOut.textContent = "…";
+        try {
+          const code = historyCode.value;
+          const res = await api(`/rates/latest?code=${encodeURIComponent(code)}`);
+          historyOut.textContent = fmt(res);
+        } catch (e) {
+          historyOut.textContent = String(e);
+        }
+      });
+
+      getHistoryBtn.addEventListener("click", async () => {
+        historyOut.textContent = "…";
+        try {
+          const code = historyCode.value;
+          const limit = Number(historyLimit.value || "50");
+          const res = await api(`/rates?code=${encodeURIComponent(code)}&limit=${encodeURIComponent(limit)}`);
+          historyOut.textContent = fmt(res);
+        } catch (e) {
+          historyOut.textContent = String(e);
+        }
+      });
+
+      updateRatesBtn.addEventListener("click", async () => {
+        latestOut.textContent = "…";
+        try {
+          const res = await api("/tasks/run", { method: "POST" });
+          latestOut.textContent = fmt(res);
+          await loadItems();
+        } catch (e) {
+          latestOut.textContent = String(e);
+        }
+      });
+
+      publishNatsBtn.addEventListener("click", async () => {
+        pubOut.textContent = "…";
+        try {
+          const type = pubType.value.trim();
+          const payload = pubPayload.value.trim() ? JSON.parse(pubPayload.value) : null;
+          const res = await api("/nats/publish", { method: "POST", body: JSON.stringify({ type, payload }) });
+          pubOut.textContent = res && res.published ? "published" : "not published";
+        } catch (e) {
+          pubOut.textContent = "error";
+          append(wsLog, `[publish] ${e}`);
+        }
+      });
+
+      refreshNatsBtn.addEventListener("click", refreshNatsStatus);
+
+      clearLogsBtn.addEventListener("click", () => {
+        natsLog.textContent = "";
+        wsLog.textContent = "";
+      });
+
+      let ws = null;
+
+      function setWsState(connected) {
+        wsStatus.textContent = connected ? "WS: connected" : "WS: disconnected";
+        wsStatus.className = "pill " + (connected ? "ok" : "bad");
+        wsConnectBtn.disabled = connected;
+        wsDisconnectBtn.disabled = !connected;
+        wsPingBtn.disabled = !connected;
+      }
+
+      function connectWs() {
+        if (ws) return;
+        ws = new WebSocket(WS_URL);
+        append(wsLog, `[ws] connect ${WS_URL}`);
+        ws.onopen = () => setWsState(true);
+        ws.onclose = () => { ws = null; setWsState(false); };
+        ws.onerror = () => append(wsLog, "[ws] error");
+        ws.onmessage = (event) => {
+          append(wsLog, `[ws] ${event.data}`);
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg && msg.type && msg.type !== "welcome" && msg.type !== "pong") {
+              append(natsLog, `[nats] ${msg.type} ${fmt(msg)}`);
+            }
+          } catch {}
+        };
+      }
+
+      wsConnectBtn.addEventListener("click", connectWs);
+      wsDisconnectBtn.addEventListener("click", () => { if (ws) ws.close(); });
+      wsPingBtn.addEventListener("click", () => { if (ws) ws.send("ping"); });
+
+      // init
+      setWsState(false);
+      refreshNatsStatus();
+      loadItems();
+      connectWs();
+    </script>
+  </body>
+</html>

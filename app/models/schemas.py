@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,3 +44,15 @@ class RateRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class NatsPublishRequest(BaseModel):
+    type: str = Field(..., min_length=1, max_length=100)
+    payload: Any = None
+
+
+class NatsStatusRead(BaseModel):
+    connected: bool
+    url: str
+    subject: str
+    source_id: str
