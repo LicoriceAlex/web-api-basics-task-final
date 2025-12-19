@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,8 +8,6 @@ from .nats.client import NatsClient
 from .tasks.rates_updater import RatesUpdater
 from .ws.manager import ConnectionManager
 from .ws.router import router as ws_router
-
-logger = logging.getLogger("currency_tracker")
 
 
 def create_app() -> FastAPI:
@@ -30,7 +26,11 @@ def create_app() -> FastAPI:
     )
 
     app.state.manager = ConnectionManager()
-    app.state.nats = NatsClient(url=settings.nats_url, subject=settings.nats_subject)
+    app.state.nats = NatsClient(
+        url=settings.nats_url,
+        subject=settings.nats_subject,
+        on_event=app.state.manager.broadcast,
+    )
     app.state.rates_updater = RatesUpdater(
         SessionLocal,
         notifier=app.state.nats.publish,
@@ -44,13 +44,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def on_startup() -> None:
         await init_db()
-
-        async def on_nats_event(event: dict) -> None:
-            logger.info("NATS event received: %s", event.get("type"))
-            await app.state.manager.broadcast(event)
-
-        app.state.nats.set_on_event(on_nats_event)
-        await app.state.nats.connect(required=True)
+        await app.state.nats.connect()
         await app.state.rates_updater.start()
 
     @app.on_event("shutdown")
@@ -62,4 +56,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

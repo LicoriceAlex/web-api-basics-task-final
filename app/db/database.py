@@ -26,7 +26,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 async def init_db() -> None:
     """Создать таблицы если их нет"""
-    from ..models import orm as _orm  # noqa: F401
+    from ..models import orm as _orm
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

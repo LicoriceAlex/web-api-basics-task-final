@@ -22,7 +22,5 @@ async def nats_publish(request: Request, payload: NatsPublishRequest):
     if not nats.is_connected:
         raise HTTPException(status_code=503, detail="NATS is not connected")
 
-    event = {"type": payload.type, "payload": payload.payload}
-    await nats.publish(event)
+    event = await nats.emit(payload.type, payload.payload)
     return {"published": True, "event": event}
-

@@ -21,4 +21,3 @@ async def ui_alias():
 async def ws_ui():
     html_path = Path(__file__).resolve().parent.parent / "static" / "ws.html"
     return FileResponse(html_path, media_type="text/html")
-

@@ -42,9 +42,7 @@ async def create_item_api(
         raise HTTPException(status_code=409, detail="Currency code already exists")
 
     item_view = CurrencyRead.model_validate(item)
-    await request.app.state.nats.publish(
-        {"type": "item_created", "payload": item_view.model_dump()}
-    )
+    await request.app.state.nats.emit("item_created", item_view.model_dump())
     return item_view
 
 
@@ -61,9 +59,7 @@ async def update_item_api(
 
     item = await update_currency(session, item, payload)
     item_view = CurrencyRead.model_validate(item)
-    await request.app.state.nats.publish(
-        {"type": "item_updated", "payload": item_view.model_dump()}
-    )
+    await request.app.state.nats.emit("item_updated", item_view.model_dump())
     return item_view
 
 
@@ -78,6 +74,5 @@ async def delete_item_api(
         raise HTTPException(status_code=404, detail="Item not found")
 
     await delete_currency(session, item)
-    await request.app.state.nats.publish({"type": "item_deleted", "payload": {"id": item_id}})
+    await request.app.state.nats.emit("item_deleted", {"id": item_id})
     return None
-

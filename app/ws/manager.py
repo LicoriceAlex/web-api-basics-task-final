@@ -2,6 +2,7 @@ from typing import Iterable
 
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
+from fastapi.websockets import WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 
@@ -20,6 +21,20 @@ class ConnectionManager:
     async def disconnect(self, websocket: WebSocket) -> None:
         """Удаляет подключение из списка"""
         self._connections.discard(websocket)
+
+    async def serve(self, websocket: WebSocket) -> None:
+        await self.connect(websocket)
+        try:
+            await websocket.send_json({"type": "welcome", "payload": "connected"})
+            while True:
+                message = await websocket.receive_text()
+                if message == "ping":
+                    await websocket.send_json({"type": "pong"})
+        except WebSocketDisconnect:
+            await self.disconnect(websocket)
+        except Exception:
+            await self.disconnect(websocket)
+            raise
 
     async def broadcast(self, message: dict) -> None:
         """Рассылает сообщение всем активным подключениям"""
